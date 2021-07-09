@@ -1,0 +1,58 @@
+---
+# To avoide multiple time puttting authntication add ssh key in ssh-agent
+- hosts: all
+  gather_facts: False
+  user: root
+
+  tasks:
+  - name: Install cyrus-sasl-plain SASL package
+    yum:
+      name: 
+        - cyrus-sasl-plain
+        - postfix
+      state: present
+    become: true
+
+  - name: sasl_passwd Credential setup
+    lineinfile:
+      path: /etc/postfix/sasl_passwd
+      line: "[smtp.office365.com]:587 bigdata.xxxx@xxxx.com:xxxx@47354"
+      create: yes
+    become: true
+
+  - name: sender_bigdata Forwarding setup
+    lineinfile:
+      path: /etc/postfix/sender_bigdata
+      line: /.+/ bigdata.xxx@xxxx.com
+      create: yes
+    become: true
+
+  - name: postmap sasl_passwd DB map
+    command: "postmap /etc/postfix/sasl_passwd"
+    become: true
+
+  - name: Update postfix main.cf config file
+    blockinfile:
+      path: /etc/postfix/main.cf
+      backup: yes 
+      insertafter: EOF
+      content: |
+        inet_protocols = ipv4
+        relayhost = [smtp.office365.com]:587
+        smtp_sasl_auth_enable = yes
+        smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+        smtp_sasl_security_options = noanonymous
+        #smtp_tls_security_level = may
+        sender_canonical_maps = regexp:/etc/postfix/sender_bigdata
+        smtp_tls_CAfile = /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+        smtp_use_tls = yes
+    become: true
+
+  - name: Postfix service Restart and send Email
+    become: true
+    systemd:
+      state: restarted
+      name: postfix
+
+  - name: Mail test for hbase
+    shell: su -l hbase -c 'echo `id`|mail -s `hostname` sumonta.naskar@xxxx.com'

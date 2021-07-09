@@ -1,0 +1,44 @@
+---
+# To avoide multiple time puttting authntication add ssh key in ssh-agent
+- hosts: all
+  gather_facts: False
+  user: root
+
+  tasks:
+  - name: Install cyrus-sasl-plain SASL package
+    yum:
+      name: cyrus-sasl-plain
+      state: latest
+
+  - name: sasl_passwd Credential setup
+    command: 'echo "[smtp.office365.com]:587 bigdata.xxx@xxx.com:xxxx@47354" > /etc/postfix/sasl_passwd'
+
+  - name: sender_bigdata Forwarding setup
+    command: 'echo "/.+/ bigdata.xxxx@xxx.com" > /etc/postfix/sender_bigdata'
+
+  - name: postmap sasl_passwd DB map
+    command: "postmap /etc/postfix/sasl_passwd"
+
+
+  - name: Update postfix main.cf config file
+    blockinfile:
+      path: /etc/postfix/main.cf
+      backup: yes 
+      insertafter: EOF
+      content: |
+        inet_protocols = ipv4
+        relayhost = [smtp.office365.com]:587
+        smtp_sasl_auth_enable = yes
+        smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+        smtp_sasl_security_options = noanonymous
+        #smtp_tls_security_level = may
+        sender_canonical_maps = regexp:/etc/postfix/sender_bigdata
+        smtp_tls_CAfile = /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+        smtp_use_tls = yes
+
+  - name: Postfix service Restart and send Email
+    command: "service postfix restart;echo `id`|mail -s `hostname` sumonta.naskar@xxxx.com"        
+
+  - name: usertest
+    command: "echo `id`|mail -s `hostname` sumonta.naskar@xxx.com"
+    become_user: ec2-user
